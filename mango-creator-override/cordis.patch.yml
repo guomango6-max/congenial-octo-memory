@@ -1,0 +1,188 @@
+# Mango Creator —— 覆盖出厂的 cordis preset(Creator mode)
+#
+# 这是 override,不是 insert:按 Loader 行 id `preset-cordis` 覆盖。
+# ⚠️ override 会**整体替换 config**,所以出厂文件里的每个字段都必须在这里重述
+#    (compositions.md:「The override replaces the complete `config`」)。
+#    下面就是出厂 cordis.patch.yml 的完整内容,按工作流做了增删。
+#
+# ⚠️ config.id 保持 `cordis` 不变 —— 这是会话记录的 preset 身份,改了已有会话
+#    恢复会被拒。改名只需要加 config.name(见下)。
+#
+# 装法(桌面版): 在应用里开 Creator mode 对话 →
+#   plugin_manager, action: install_bundle, target 填这个目录的绝对路径。
+#   桌面版的 CLI 启动不了 profiles/desktop,别走命令行。
+
+- id: preset-cordis
+  name: '@deepseek-ai/dsh-agent-preset'
+  config:
+    id: cordis
+    # 加了 name 之后 isBuiltInPreset 变 false,locale 字典里的 "Creator"
+    # 不再生效,显示名就是这里写的。副作用见文件末尾。
+    name: Mango Creator
+    description: 读仓库、跑脚本、写文档。小改直接做,大改先问。
+    order: 4
+
+    plugins:
+      # ---------- persona: 工作流写在这里 ----------
+      - id: persona
+        name: '@deepseek-ai/dsh-persona'
+        config:
+          prefix: |
+            你是由 {{model}} 驱动的助手。用中文回答。
+
+            这个 preset 的三类典型任务:
+            1. 读仓库、把代码和结构讲清楚 —— 这是最常见的一类。先搜再读,
+               用 grep / glob 定位,只读需要的片段,不要整文件灌进上下文。
+               结论要落到具体文件和行号上,不要凭印象概述。
+            2. 跑脚本、处理数据 —— 用 shell 做实际的事。长输出先过滤再看,
+               不要把几千行原样读回来。
+            3. 写文档、查资料 —— 需要外部事实时联网查,不要靠记忆回答
+               版本号、价格、API 形状这类会过期的东西。
+
+            动手的分寸:
+            - 小改直接做。改一个函数、补一个测试、修个 typo、调个配置,
+              不要先问,做完说一句改了什么。
+            - 大改先问。动公开接口或数据结构、跨多个文件重构、删文件、
+              改构建或 CI、碰 git 历史,先说清方案等确认。
+            - 分不清大小就按大的算。
+            - 有歧义时用 ask_user_question 问,但只问我才能决定的事;
+              代码在哪、现在怎么跑的,自己去查。
+
+            你也带着改 dsh 自身的工具(cordis、plugin_manager),但那不是
+            默认任务 —— 只在我明确要求调整 harness 配置时才用。
+
+            报告口径:
+            - 查到的就说查到,没验证的说清是推测。
+            - 测试失败就贴输出,不要含糊成"基本可以"。
+            - 跳过了什么、为什么跳过,明确说。
+
+      - id: agent-instructions
+        name: '@deepseek-ai/dsh-agent-instructions'
+        config:
+          maxBytes: 65536
+
+      - id: time-context
+        name: '@deepseek-ai/dsh-time-context'
+
+      # ---------- shell ----------
+      - id: tool-bash
+        name: '@deepseek-ai/dsh-tool-bash'
+        disabled: !!js process.platform === 'win32'
+      - id: tool-pwsh
+        name: '@deepseek-ai/dsh-tool-pwsh'
+        disabled: !!js process.platform !== 'win32'
+
+      # ---------- 文件读写 + 搜索 ----------
+      - id: tool-fs
+        name: '@deepseek-ai/dsh-tool-fs'
+        config:
+          applyPatch: false
+      - id: tool-fs-search
+        name: '@deepseek-ai/dsh-tool-fs-search'
+        config:
+          sampleOverCapGlobResults: false
+
+      # ---------- 长任务: 自动压缩历史接着跑(出厂原样) ----------
+      - id: compaction
+        name: cordis:group
+        group: true
+        isolate:
+          compaction: true
+          toolResultPruner: true
+        config:
+          - id: compaction-basic
+            name: '@deepseek-ai/dsh-compaction-basic'
+          - id: command-compact
+            name: '@deepseek-ai/dsh-command-compact'
+          - id: tool-result-pruner
+            name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+            config:
+              thresholdChars: 8192
+              headChars: 4096
+              tailChars: 1024
+
+      # ---------- 大改先问 ----------
+      - id: tool-ask-user
+        name: '@deepseek-ai/dsh-tool-ask-user'
+
+      # ---------- 查资料 ----------
+      - id: tool-web
+        name: '@deepseek-ai/dsh-tool-web'
+        config:
+          fetch: true
+          searchTimeoutMs: 60000
+
+      # ---------- skill ----------
+      - id: skill-filesystem
+        name: '@deepseek-ai/dsh-skill-filesystem'
+        config:
+          customSkillDirs:
+            - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-agent-preset/package.json')), 'skills')
+      - id: tool-skill
+        name: '@deepseek-ai/dsh-tool-skill'
+
+      # ---------- 产出 ----------
+      - id: present
+        name: '@deepseek-ai/dsh-tool-present'
+      # 新增: 出厂 cordis 没有 tool-office,standard 才有。你要写文档,加上。
+      - id: tool-office
+        name: '@deepseek-ai/dsh-tool-office'
+
+      # ---------- 改 dsh 自身: 保留 ----------
+      # 保留的理由: 这个 override 占的就是 Creator 的位置,Settings 里
+      # 「让 agent 创建插件」那个入口仍然指向 cordis。而且你以后要迭代
+      # 这个 preset 本身,还得靠 plugin_manager 装 bundle。
+      - id: tool-cordis
+        name: '@deepseek-ai/dsh-tool-cordis'
+      - id: tool-plugin-manager
+        name: '@deepseek-ai/dsh-plugin-manager/tools'
+        disabled: !!js "!ctx.get('profileContext')"
+      - id: tool-plugin-market
+        name: '@deepseek-ai/dsh-plugin-market/tools'
+        disabled: !!js "!ctx.get('profileContext')"
+
+# ===========================================================================
+# 与出厂 cordis 的差异
+#
+# 改了:
+#   persona.prefix   出厂是 "You help the user customize DeepSeek Harness
+#                    itself",换成你的三类任务 + 大小改分寸。
+#   config.name      出厂没有这个字段,加上才能改名(见上)。
+#   config.description 同上。
+#
+# 去掉的:
+#   planning 组      plan-mode。你选「小改直接做,大改先问」,plan-mode 是
+#                    另一条路线(任何改动都先出计划等批),约束改写进 persona。
+#   delegation 组    tool-subagent / tool-subagent-fork / workflow-ptc /
+#                    tool-workflow。没选「拆给 subagent 并行」。
+#   tool-jobs        没选「后台 job / 定时」。
+#   tool-schedule    同上。
+#   tool-todo        没选「用 todo 跟进度」。
+#   command-goal     和 todo 同类,一起去掉保持一致。
+#   tool-goal
+#
+# 加了:
+#   tool-office      出厂 cordis 没有,但你要写文档。office-kit 和
+#                    skill-office 在 web-app bundle 的 host 层已挂好,
+#                    preset 这边只需要这一行。
+#
+# 保留:
+#   tool-cordis / tool-plugin-manager / tool-plugin-market(理由见上)
+#
+# 不在 preset 层、所以没动:
+#   权限/审批        sandbox-policy(默认 workspace-write)、user-approval
+#                    (默认 ask)、permission-presets 都在 base bundle 的
+#                    host 层。「读放开,写和 shell 要批」就是出厂默认。
+#                    临时切: /permission read-only|workspace-write|danger-full-access
+#
+# 改名的两个副作用(都不影响功能):
+#   1. 这张卡会从 Settings 的 built-in 组挪到 custom 组
+#      (AgentPresetSection.tsx:106 按 isBuiltInPreset 分组)。
+#   2. 出厂 preset 才有的那个「模式说明 / 用法示例」只读弹窗会消失,
+#      因为它只认 locale 字典里的内置 preset。
+#   想保留内置名和弹窗就删掉 config.name / config.description,
+#   但那样名字还是 Creator。
+#
+# 验证: plugin_manager list_plugins 看 preset-cordis 行的激活状态,或看
+#       Plugins 页。激活失败的声明会留在列表里带诊断。
+#       已有会话保留启动时的版本,要新开会话才生效。
