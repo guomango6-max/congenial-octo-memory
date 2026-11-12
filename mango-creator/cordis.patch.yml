@@ -1,0 +1,70 @@
+# Mango Creator —— agent preset 声明骨架
+#
+# 装法: plugin_manager, action: install_bundle, target 填这个目录的绝对路径
+#       (不要用 shell 手动 npm install / 选 bundle,install_bundle 自己会做)
+#
+# ⚠️ 两个 id 的区别,改名前必读:
+#   - 下面这行的 `id: preset-mango-creator` 是 Loader 行 id,只用于定位 patch,
+#     约定写成 preset-<config.id>,改它不影响会话。
+#   - `config.id` 是 **会话记录下来的 preset 身份**。已有会话恢复时按这个 id
+#     去找定义,找不到就直接拒绝恢复。所以如果你是在给一个已经用过的 preset
+#     改名,config.id 要保持原样(例如原来的 jacky-creator),只改 config.name。
+#   - `config.name` 才是 UI 里显示的名字 —— 这才是“改名”该动的地方。
+#
+# config.id 规则: 小写字母、数字、连字符。
+
+- insert:
+    - id: preset-mango-creator
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        # 新建就用 mango-creator;若是沿用旧 preset 请换回它原本的 id
+        id: mango-creator
+        name: Mango Creator
+        description: TODO 一句话说明这个 preset 干什么
+        order: 10
+
+        plugins:
+          # ---- persona: 工作流的主要落点,把你的实际流程写进 prefix ----
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |
+                TODO 在这里写你的实际工作流:
+                - 你平时在做什么项目 / 什么语言栈
+                - 希望它默认先做什么、后做什么
+                - 什么情况下必须停下来问你
+                - 输出格式偏好(中文?要不要贴 diff?)
+
+          # ---- 工具: 按需增删。下面是一份常见起点,# 掉的是要确认才开的 ----
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+          # - id: tool-web
+          #   name: '@deepseek-ai/dsh-tool-web'
+          # - id: tool-skill
+          #   name: '@deepseek-ai/dsh-tool-skill'
+          # - id: tool-subagent
+          #   name: '@deepseek-ai/dsh-tool-subagent'
+          # - id: tool-workflow
+          #   name: '@deepseek-ai/dsh-tool-workflow'
+          # - id: tool-lsp
+          #   name: '@deepseek-ai/dsh-tool-lsp'
+
+# 验证: plugin_manager list_bundles 看 bundle,list_plugins 看 preset-mango-creator
+#       这一行的激活状态;或者直接看 Plugins 页。激活失败的声明会留在列表里带
+#       诊断信息,修好重装即可。已有会话保留它启动时的版本,要新开会话才生效。
+
+# ---------------------------------------------------------------------------
+# 想做成“完整的 Creator mode 换名版”?
+# 把官方 Creator 的 config.plugins 整段抄过来即可(约 130 行,含 plan-mode、
+# compaction、subagent/workflow 分组、skill-filesystem、plugin_manager 等):
+#   源文件: <dsh 安装目录>/packages/bundle/web-app/presets/cordis.patch.yml
+#   源码 checkout 里就是这个相对路径;Desktop 版在 app.asar 内,用文件读取工具读。
+#   同目录还有 standard / ptc / minimal 三个,minimal.patch.yml 最短,适合当模板。
+# 抄的时候只改 config.id / config.name / config.order 和 persona.prefix,
+# 其余保持原样 —— 这样 Creator mode 本身不受影响,你多出一个并存的 preset。
