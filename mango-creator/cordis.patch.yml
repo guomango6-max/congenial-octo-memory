@@ -1,70 +1,168 @@
-# Mango Creator —— agent preset 声明骨架
+# Mango Creator — agent preset
 #
-# 装法: plugin_manager, action: install_bundle, target 填这个目录的绝对路径
-#       (不要用 shell 手动 npm install / 选 bundle,install_bundle 自己会做)
+# 基底: 官方 standard (packages/bundle/web-app/presets/standard.patch.yml)
+# 按工作流做的增删见文件末尾的「与 standard 的差异」。
 #
-# ⚠️ 两个 id 的区别,改名前必读:
-#   - 下面这行的 `id: preset-mango-creator` 是 Loader 行 id,只用于定位 patch,
-#     约定写成 preset-<config.id>,改它不影响会话。
-#   - `config.id` 是 **会话记录下来的 preset 身份**。已有会话恢复时按这个 id
-#     去找定义,找不到就直接拒绝恢复。所以如果你是在给一个已经用过的 preset
-#     改名,config.id 要保持原样(例如原来的 jacky-creator),只改 config.name。
-#   - `config.name` 才是 UI 里显示的名字 —— 这才是“改名”该动的地方。
+# 装法: plugin_manager, action: install_bundle, target 填这个目录的绝对路径。
+#       它自己会做包安装和 bundle 选择,不要用 shell 手动走。
 #
-# config.id 规则: 小写字母、数字、连字符。
+# ⚠️ 改名注意: config.name 是 UI 显示名,随便改。config.id 是会话记录的 preset
+#    身份 —— 已有会话恢复时按它找定义,找不到直接拒绝恢复。如果你是要把一个
+#    已经用过的 preset 改名(比如原来的 jacky-creator),把下面的 config.id
+#    换回它原本的值,只留 config.name 为 Mango Creator。
 
 - insert:
     - id: preset-mango-creator
       name: '@deepseek-ai/dsh-agent-preset'
       config:
-        # 新建就用 mango-creator;若是沿用旧 preset 请换回它原本的 id
         id: mango-creator
         name: Mango Creator
-        description: TODO 一句话说明这个 preset 干什么
+        description: 读仓库、跑脚本、写文档。小改直接做,大改先问。
         order: 10
 
         plugins:
-          # ---- persona: 工作流的主要落点,把你的实际流程写进 prefix ----
+          # ---------- persona: 工作流写在这里 ----------
           - id: persona
             name: '@deepseek-ai/dsh-persona'
             config:
               prefix: |
-                TODO 在这里写你的实际工作流:
-                - 你平时在做什么项目 / 什么语言栈
-                - 希望它默认先做什么、后做什么
-                - 什么情况下必须停下来问你
-                - 输出格式偏好(中文?要不要贴 diff?)
+                你是由 {{model}} 驱动的助手。用中文回答。
 
-          # ---- 工具: 按需增删。下面是一份常见起点,# 掉的是要确认才开的 ----
+                这个 preset 的三类典型任务:
+                1. 读仓库、把代码和结构讲清楚 —— 这是最常见的一类。先搜再读,
+                   用 grep / glob 定位,只读需要的片段,不要整文件灌进上下文。
+                   结论要落到具体文件和行号上,不要凭印象概述。
+                2. 跑脚本、处理数据 —— 用 shell 做实际的事。长输出先过滤再看,
+                   不要把几千行原样读回来。
+                3. 写文档、查资料 —— 需要外部事实时联网查,不要靠记忆回答
+                   版本号、价格、API 形状这类会过期的东西。
+
+                动手的分寸:
+                - 小改直接做。改一个函数、补一个测试、修个 typo、调个配置,
+                  不要先问,做完说一句改了什么。
+                - 大改先问。动公开接口或数据结构、跨多个文件重构、删文件、
+                  改构建或 CI、碰 git 历史,先说清方案等确认。
+                - 分不清大小就按大的算。
+                - 有歧义时用 ask_user_question 问,但只问我才能决定的事;
+                  代码在哪、现在怎么跑的,自己去查。
+
+                报告口径:
+                - 查到的就说查到,没验证的说清是推测。
+                - 测试失败就贴输出,不要含糊成"基本可以"。
+                - 跳过了什么、为什么跳过,明确说。
+
+          - id: agent-instructions
+            name: '@deepseek-ai/dsh-agent-instructions'
+            config:
+              maxBytes: 65536
+
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+
+          # ---------- shell: 跑脚本/处理数据 ----------
           - id: tool-bash
             name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+
+          # ---------- 文件读写 + 搜索: 读仓库的主力 ----------
           - id: tool-fs
             name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              # true 会在 edit 旁边多一个 apply_patch 工具
+              applyPatch: false
           - id: tool-fs-search
             name: '@deepseek-ai/dsh-tool-fs-search'
-          - id: tool-todo
-            name: '@deepseek-ai/dsh-tool-todo'
-          # - id: tool-web
-          #   name: '@deepseek-ai/dsh-tool-web'
-          # - id: tool-skill
-          #   name: '@deepseek-ai/dsh-tool-skill'
-          # - id: tool-subagent
-          #   name: '@deepseek-ai/dsh-tool-subagent'
-          # - id: tool-workflow
-          #   name: '@deepseek-ai/dsh-tool-workflow'
-          # - id: tool-lsp
-          #   name: '@deepseek-ai/dsh-tool-lsp'
+            config:
+              sampleOverCapGlobResults: false
 
-# 验证: plugin_manager list_bundles 看 bundle,list_plugins 看 preset-mango-creator
-#       这一行的激活状态;或者直接看 Plugins 页。激活失败的声明会留在列表里带
-#       诊断信息,修好重装即可。已有会话保留它启动时的版本,要新开会话才生效。
+          # ---------- skill: office skill 要靠它才能加载 ----------
+          - id: skill-filesystem
+            name: '@deepseek-ai/dsh-skill-filesystem'
+            config:
+              customSkillDirs:
+                - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-agent-preset/package.json')), 'skills')
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
 
-# ---------------------------------------------------------------------------
-# 想做成“完整的 Creator mode 换名版”?
-# 把官方 Creator 的 config.plugins 整段抄过来即可(约 130 行,含 plan-mode、
-# compaction、subagent/workflow 分组、skill-filesystem、plugin_manager 等):
-#   源文件: <dsh 安装目录>/packages/bundle/web-app/presets/cordis.patch.yml
-#   源码 checkout 里就是这个相对路径;Desktop 版在 app.asar 内,用文件读取工具读。
-#   同目录还有 standard / ptc / minimal 三个,minimal.patch.yml 最短,适合当模板。
-# 抄的时候只改 config.id / config.name / config.order 和 persona.prefix,
-# 其余保持原样 —— 这样 Creator mode 本身不受影响,你多出一个并存的 preset。
+          # ---------- 大改先问 ----------
+          - id: tool-ask-user
+            name: '@deepseek-ai/dsh-tool-ask-user'
+
+          # ---------- 长任务: 自动压缩历史接着跑 ----------
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+              - id: command-compact
+                name: '@deepseek-ai/dsh-command-compact'
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config:
+                  thresholdChars: 8192
+                  headChars: 4096
+                  tailChars: 1024
+
+          # ---------- 查资料 ----------
+          - id: tool-web
+            name: '@deepseek-ai/dsh-tool-web'
+            config:
+              fetch: true
+              searchTimeoutMs: 60000
+
+          # ---------- 写文档 ----------
+          - id: present
+            name: '@deepseek-ai/dsh-tool-present'
+          - id: tool-office
+            name: '@deepseek-ai/dsh-tool-office'
+
+# ===========================================================================
+# 与官方 standard 的差异
+#
+# 去掉的:
+#   plan-mode        你选了「小改直接做,大改先问」,plan-mode 是另一种路线
+#                    (任何改动都先出计划等批),两者冲突。约束改成写在 persona 里。
+#   delegation 组    tool-subagent / tool-subagent-fork / workflow-ptc /
+#                    tool-workflow。你没选「拆给 subagent 并行」。
+#   tool-jobs        没选「后台 job / 定时」。
+#   tool-schedule    同上。
+#   tool-todo        没选「用 todo 跟进度」。
+#   command-goal     goal 和 todo 是一类东西,一起去掉保持一致。
+#   tool-goal
+#   plugin-manager   standard 里有,但那是用来改 dsh 自己的,不在你的工作流里。
+#   plugin-market
+#
+# 保留但值得知道的:
+#   tool-office      office_render / office_convert / office_recalculate。
+#                    office-kit 和 skill-office 挂在 web-app bundle(host 层),
+#                    已经在了,preset 这边只需要 tool-office。
+#   tool-web         web-search-deepseek 和 web-fetch-http 在 base bundle,
+#                    host 层已有,preset 只需要 tool-web。
+#
+# 没放进来、因为不属于 preset 管的:
+#   权限/审批        sandbox-policy(默认 workspace-write)、user-approval
+#                    (默认 ask)、permission-presets 都在 base bundle 的 host 层。
+#                    「读放开,写和 shell 要批」就是出厂默认,不用配。
+#                    要临时切:/permission read-only|workspace-write|danger-full-access
+#
+# 想加回来的话(各 2-4 行):
+#   todo:       - id: tool-todo
+#                 name: '@deepseek-ai/dsh-tool-todo'
+#                 config: { allowParallelInProgress: true }
+#   定时/后台:  - id: tool-jobs
+#                 name: '@deepseek-ai/dsh-tool-jobs'
+#               - id: tool-schedule
+#                 name: '@deepseek-ai/dsh-tool-schedule'
+#   改 dsh 自己: 把官方 cordis.patch.yml 里的 tool-cordis、tool-plugin-manager
+#               两行抄过来(这才是真正的 Creator mode 能力)。
+#
+# 验证: plugin_manager list_bundles 看 bundle,list_plugins 看
+#       preset-mango-creator 行的激活状态;或直接看 Plugins 页。
+#       激活失败的声明会留在列表里带诊断。已有会话保留启动时的版本,要新开会话。
